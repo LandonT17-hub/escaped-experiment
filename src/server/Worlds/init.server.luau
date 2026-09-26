@@ -1,0 +1,4 @@
+-- The map is hand-built in Studio; nothing here creates geometry.
+-- WorldWiring.Wire(config, nextConfig, parts) attaches each world's gameplay
+-- systems to its parts -- not called yet: pending the lookup that finds each
+-- world's hand-built parts by name.
