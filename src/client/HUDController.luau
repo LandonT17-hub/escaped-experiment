@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
@@ -117,11 +118,15 @@ local function abbreviate(value: number): string
 	return text .. SUFFIXES[index]
 end
 
+-- HUDScale shrinks/grows DesktopHUD itself, so the frame is resized by the
+-- inverse scale to keep it exactly filling the screen -- otherwise right- and
+-- bottom-anchored elements get pulled toward the top-left.
 local function wireScale(hud: Instance)
 	local uiScale = find(hud, "HUDScale", "UIScale")
 	if not uiScale then
 		return
 	end
+	local frame = if hud:IsA("GuiObject") then hud else nil
 
 	local cameraConnection: RBXScriptConnection? = nil
 
@@ -134,7 +139,16 @@ local function wireScale(hud: Instance)
 			return
 		end
 		local function apply()
-			uiScale.Scale = camera.ViewportSize.Y / DESIGN_HEIGHT
+			local scale = camera.ViewportSize.Y / DESIGN_HEIGHT
+			if scale <= 0 then
+				return
+			end
+			uiScale.Scale = scale
+			if frame then
+				frame.AnchorPoint = Vector2.zero
+				frame.Position = UDim2.fromScale(0, 0)
+				frame.Size = UDim2.fromScale(1 / scale, 1 / scale)
+			end
 		end
 		cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(apply)
 		apply()
@@ -353,6 +367,9 @@ function HUDController.Init()
 	if not hud then
 		return
 	end
+
+	-- Roblox's built-in top-right health bar duplicates HPBar.
+	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Health, false)
 
 	wireScale(hud)
 	wireStageBar(hud, player)
