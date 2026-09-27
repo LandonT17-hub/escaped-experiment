@@ -120,42 +120,31 @@ end
 
 -- HUDScale shrinks/grows DesktopHUD itself, so the frame is resized by the
 -- inverse scale to keep it exactly filling the screen -- otherwise right- and
--- bottom-anchored elements get pulled toward the top-left.
-local function wireScale(hud: Instance)
+-- bottom-anchored elements get pulled toward the top-left. Driven by the
+-- ScreenGui's own AbsoluteSize (the real drawable area), which also updates
+-- when the window resizes mid-play, e.g. docking a Studio panel.
+local function wireScale(mainHud: LayerCollector, hud: Instance)
 	local uiScale = find(hud, "HUDScale", "UIScale")
 	if not uiScale then
 		return
 	end
 	local frame = if hud:IsA("GuiObject") then hud else nil
 
-	local cameraConnection: RBXScriptConnection? = nil
-
-	local function bindCamera()
-		if cameraConnection then
-			cameraConnection:Disconnect()
+	local function apply()
+		local scale = mainHud.AbsoluteSize.Y / DESIGN_HEIGHT
+		if scale <= 0 then
+			return -- not laid out yet; AbsoluteSize will change again
 		end
-		local camera = workspace.CurrentCamera
-		if not camera then
-			return
+		uiScale.Scale = scale
+		if frame then
+			frame.AnchorPoint = Vector2.zero
+			frame.Position = UDim2.fromScale(0, 0)
+			frame.Size = UDim2.fromScale(1 / scale, 1 / scale)
 		end
-		local function apply()
-			local scale = camera.ViewportSize.Y / DESIGN_HEIGHT
-			if scale <= 0 then
-				return
-			end
-			uiScale.Scale = scale
-			if frame then
-				frame.AnchorPoint = Vector2.zero
-				frame.Position = UDim2.fromScale(0, 0)
-				frame.Size = UDim2.fromScale(1 / scale, 1 / scale)
-			end
-		end
-		cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(apply)
-		apply()
 	end
 
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCamera)
-	bindCamera()
+	mainHud:GetPropertyChangedSignal("AbsoluteSize"):Connect(apply)
+	apply()
 end
 
 local function wireStageBar(hud: Instance, player: Player)
@@ -358,7 +347,7 @@ function HUDController.Init()
 	local playerGui = player:WaitForChild("PlayerGui")
 
 	local mainHud = playerGui:WaitForChild("MainHUD", 15)
-	if not mainHud then
+	if not mainHud or not mainHud:IsA("LayerCollector") then
 		warn("[HUD] PlayerGui.MainHUD not found -- is StarterGui > MainHUD present?")
 		return
 	end
@@ -371,7 +360,7 @@ function HUDController.Init()
 	-- Roblox's built-in top-right health bar duplicates HPBar.
 	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Health, false)
 
-	wireScale(hud)
+	wireScale(mainHud, hud)
 	wireStageBar(hud, player)
 	wireObjective(hud)
 	wireHealth(hud, player)

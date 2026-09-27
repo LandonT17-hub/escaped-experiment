@@ -18,9 +18,8 @@ export type WorldParts = {
 	Stages: { [number]: StageObjective.StageParts }, -- by stage index; holes where a stage failed to resolve
 	Boss: StageObjective.StageParts?,
 	Pedestals: Instance?, -- contains "Pedestal1".."PedestalN"
-	MultiplierPads: Instance?, -- contains "Pad1".."Pad6"
 	Leaderboards: Instance?,
-	TrainingArea: Instance?, -- contains "Dummy1".."Dummy6"
+	TrainingPlots: Instance?, -- contains "Plot1".."Plot8"
 }
 
 local MapResolver = {}
@@ -138,8 +137,8 @@ function MapResolver.WarnStrayEnemies()
 			continue
 		end
 		local model = descendant.Parent
-		-- Training dummies are meant to be static (TrainingDummies wires them).
-		if not model or seen[model] or Players:GetPlayerFromCharacter(model) or model:FindFirstAncestor("TrainingArea") then
+		-- Training plot dummies are meant to be static (TrainingPlots wires them).
+		if not model or seen[model] or Players:GetPlayerFromCharacter(model) or model:FindFirstAncestor("TrainingPlots") then
 			continue
 		end
 		seen[model] = true
@@ -178,9 +177,8 @@ function MapResolver.Resolve(worldFolder: Instance, config: WorldsData.WorldConf
 		Stages = stages,
 		Boss = arena and resolveBoss(arena, lobbyPosition),
 		Pedestals = find(lobby, "Pedestals"),
-		MultiplierPads = find(lobby, "MultiplierPads"),
 		Leaderboards = find(lobby, "Leaderboards"),
-		TrainingArea = find(lobby, "TrainingArea"),
+		TrainingPlots = find(lobby, "TrainingPlots"),
 	}
 end
 

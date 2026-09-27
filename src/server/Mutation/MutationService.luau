@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
-local MultiplierPads = require(script.Parent.MultiplierPads)
 
 local MutationService = {}
 
@@ -85,11 +84,11 @@ function MutationService.GetRebirthCost(player: Player): number
 	return math.floor(BASE_REBIRTH_WINS_COST * REBIRTH_COST_GROWTH ^ MutationService.GetRebirthCount(player))
 end
 
--- Sources of Mutation: combat kills (DummyEnemy) and lobby training dummies
--- (TrainingDummies). No passive walk-to-gain.
+-- Sources of Mutation: combat kills (DummyEnemy) and lobby training plots
+-- (TrainingPlots, which pass in their own plot multiplier). No passive
+-- walk-to-gain.
 --
--- Applies the player's best qualifying Multiplier Pad (MultiplierPads) and
--- their permanent Rebirth multiplier here, at the single point Mutation
+-- Applies the player's permanent Rebirth multiplier here, at the single point Mutation
 -- ever gets granted, so every source of Mutation benefits automatically
 -- instead of each caller needing to remember to.
 function MutationService.GrantMutation(player: Player, amount: number?)
@@ -97,8 +96,7 @@ function MutationService.GrantMutation(player: Player, amount: number?)
 		return
 	end
 
-	local rebirthCount = MutationService.GetRebirthCount(player)
-	local multiplier = MultiplierPads.GetMultiplier(player, rebirthCount) * MutationService.GetRebirthMultiplier(player)
+	local multiplier = MutationService.GetRebirthMultiplier(player)
 	amount = math.floor((amount or 1) * multiplier)
 	mutationValues[player] += amount
 	mutationUpdated:FireClient(player, mutationValues[player])

@@ -1,6 +1,6 @@
 -- Attaches one world's gameplay systems to its hand-built parts (resolved by
--- MapResolver): stage objectives, the boss arena, Form Pedestals, Multiplier
--- Pads, leaderboards and training dummies. Builds no geometry -- the map
+-- MapResolver): stage objectives, the boss arena, Form Pedestals,
+-- leaderboards and training plots. Builds no geometry -- the map
 -- lives in the place file. (Rebirth, Store and Codes are HUD menus, not
 -- stations -- see Menus/.)
 
@@ -10,9 +10,8 @@ local MapResolver = require(script.Parent.MapResolver)
 local StageObjective = require(script.Parent.StageObjective)
 local WorldsData = require(script.Parent.WorldsData)
 local FormPedestals = require(ServerScriptService.Server.Evolution.FormPedestals)
-local MultiplierPads = require(ServerScriptService.Server.Mutation.MultiplierPads)
 local Leaderboards = require(ServerScriptService.Server.Lobby.Leaderboards)
-local TrainingDummies = require(ServerScriptService.Server.Lobby.TrainingDummies)
+local TrainingPlots = require(ServerScriptService.Server.Lobby.TrainingPlots)
 
 local WorldWiring = {}
 
@@ -36,16 +35,12 @@ function WorldWiring.Wire(config: WorldsData.WorldConfig, parts: MapResolver.Wor
 		FormPedestals.WireUp(parts.Pedestals, config.Id, config.Forms)
 	end
 
-	if parts.MultiplierPads then
-		MultiplierPads.WireUp(parts.MultiplierPads)
-	end
-
 	if parts.Leaderboards then
 		Leaderboards.WireUp(parts.Leaderboards)
 	end
 
-	if parts.TrainingArea then
-		TrainingDummies.WireUp(parts.TrainingArea)
+	if parts.TrainingPlots then
+		TrainingPlots.WireUp(parts.TrainingPlots)
 	end
 end
 

@@ -4,7 +4,6 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local MutationService = require(ServerScriptService.Server.Mutation.MutationService)
-local MultiplierPads = require(ServerScriptService.Server.Mutation.MultiplierPads)
 local GamepassData = require(ServerScriptService.Server.Mutation.GamepassData)
 local GamepassService = require(ServerScriptService.Server.Mutation.GamepassService)
 local CodesService = require(script.CodesService)
@@ -65,11 +64,12 @@ local function storeCatalog(player: Player): { StoreItem }
 		})
 	end
 
-	for _, pad in MultiplierPads.GetGamepassPads() do
+	local plotPassId = GamepassData.TrainingPlotPassId
+	if plotPassId > 0 then
 		table.insert(items, {
-			Name = `x{pad.Multiplier} Mutation`,
-			GamePassId = pad.GamePassId,
-			Owned = GamepassService.OwnsGamePass(player, pad.GamePassId),
+			Name = "x10 Training Plot",
+			GamePassId = plotPassId,
+			Owned = GamepassService.OwnsGamePass(player, plotPassId),
 		})
 	end
 

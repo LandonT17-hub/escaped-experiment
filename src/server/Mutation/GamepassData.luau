@@ -8,19 +8,17 @@ local GamepassData = {}
 -- RequiresPremium = true). Not Roblox Premium membership.
 GamepassData.PremiumWinsPassId = 0
 
--- Multiplier Pads whose RequirementType is "Gamepass", keyed by the pad's
--- PadIndex attribute. Example once created: [5] = 123456789,
-GamepassData.MultiplierPadPasses = {} :: { [number]: number }
+-- Unlocks the gamepass training plot (Plot5, x10). Replaces the old
+-- per-pad multiplier passes, none of which had been created yet.
+GamepassData.TrainingPlotPassId = 0
 
 function GamepassData.AllPassIds(): { number }
 	local ids = {}
 	if GamepassData.PremiumWinsPassId > 0 then
 		table.insert(ids, GamepassData.PremiumWinsPassId)
 	end
-	for _, id in GamepassData.MultiplierPadPasses do
-		if id > 0 then
-			table.insert(ids, id)
-		end
+	if GamepassData.TrainingPlotPassId > 0 then
+		table.insert(ids, GamepassData.TrainingPlotPassId)
 	end
 	return ids
 end

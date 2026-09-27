@@ -17,8 +17,10 @@ Win pads, earning Wins (the game's currency) along the way. Wins unlock
 that world's evolution forms (12 per world) and fuel Rebirth. Core stat is
 "Mutation."
 
-Multiplier pads: a player's Mutation multiplier is the highest multiplier
-among the pads they qualify for -- pads do not stack.
+Training plots (lobby, Plot1-8): hitting a plot's dummy grants Mutation at
+that plot's multiplier (x1-x70) if the player has unlocked it (free /
+rebirth count / gamepass). The rebirth multiplier applies on top. Unlock
+rules live in code (TrainingPlots.luau), not on the signs.
 
 ## Scope: what Claude works on
 
