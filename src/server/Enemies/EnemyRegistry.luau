@@ -4,6 +4,9 @@
 
 export type EnemyApi = {
 	TakeDamage: (amount: number, attacker: Player?) -> (),
+	-- Part used for range/facing checks; defaults to the model's PrimaryPart.
+	-- Lets hand-built targets (training dummies) register without a PrimaryPart.
+	TargetPart: BasePart?,
 }
 
 local EnemyRegistry = {}

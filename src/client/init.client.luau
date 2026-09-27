@@ -8,3 +8,6 @@ CombatInput.Init()
 
 local StageObjectiveHUD = require(script.StageObjectiveHUD)
 StageObjectiveHUD.Init()
+
+local MenuButtons = require(script.MenuButtons)
+MenuButtons.Init()

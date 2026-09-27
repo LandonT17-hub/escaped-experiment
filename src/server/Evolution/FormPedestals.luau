@@ -1,43 +1,61 @@
+local ServerScriptService = game:GetService("ServerScriptService")
+
 local FormData = require(script.Parent.FormData)
 local EvolutionService = require(script.Parent.EvolutionService)
+local MapLookup = require(ServerScriptService.Server.Worlds.MapLookup)
 
--- Wires functionality onto the hand-built pedestal Parts
--- (named "FormPedestal1".."FormPedestalN") for one specific world -- doesn't
--- rebuild the geometry, just attaches a ProximityPrompt and updates the
--- label each one has (if any). Called once per world by WorldWiring, so the
--- same code wires all 4 worlds' pedestals instead of each being hand-built.
+-- Wires the hand-built pedestals (Lobby.Pedestals > Pedestal1..N, each a
+-- Model with a Base part) for one world. Each pedestal's FormName/WinsCost
+-- attributes are the source of truth for that form's name and price and
+-- overwrite the placeholders in WorldsData; damage stays code-defined.
+-- Adds a ProximityPrompt to Base that buys (in order) or re-equips the form
+-- -- EvolutionService validates everything server-side. Leaves the
+-- pedestal's own Label alone: it's shared by every viewer, so it can't show
+-- per-player owned/equipped state.
 
 local FormPedestals = {}
 
-function FormPedestals.WireUp(
-	pedestalsFolder: Instance,
-	worldId: number,
-	worldName: string,
-	forms: { FormData.FormDefinition }
-)
-	for i, formDef in forms do
-		local pedestal = pedestalsFolder:FindFirstChild("FormPedestal" .. i)
-		if not pedestal or not pedestal:IsA("BasePart") then
+function FormPedestals.WireUp(pedestalsFolder: Instance, worldId: number, forms: { FormData.FormDefinition })
+	for i = 1, #forms do
+		local pedestal = MapLookup.Find(pedestalsFolder, "Pedestal" .. i, "Model")
+		if not pedestal then
 			continue
 		end
 
-		local billboard = pedestal:FindFirstChild("Label")
-		local textLabel = billboard and billboard:FindFirstChild("TextLabel")
-		if textLabel and textLabel:IsA("TextLabel") then
-			local costText = if formDef.WinsCost <= 0 then "Starting Form" else `Cost: {formDef.WinsCost} Wins`
-			textLabel.Text = `World {worldId}: {worldName}\n{formDef.Name}\n{costText}`
+		local formIndex = MapLookup.Attr(pedestal, "FormIndex", "number") or i
+		local formDef = forms[formIndex]
+		if not formDef then
+			warn(`[Map] {pedestal:GetFullName()} FormIndex {formIndex} has no form in WorldsData`)
+			continue
+		end
+
+		local formName = MapLookup.Attr(pedestal, "FormName", "string")
+		if formName then
+			formDef.Name = formName
+		end
+
+		local winsCost = MapLookup.Attr(pedestal, "WinsCost", "number")
+		if winsCost then
+			formDef.WinsCost = winsCost
+		end
+
+		local base = MapLookup.Find(pedestal, "Base", "BasePart")
+		if not base then
+			continue
 		end
 
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "UnlockPrompt"
-		prompt.ActionText = if i == 1 then "Equip" else "Unlock"
+		-- Shared by every viewer, so it can't say "Unlock" vs "Equip" per player.
+		prompt.ActionText = if formDef.WinsCost <= 0 then "Equip" else `Unlock / Equip ({formDef.WinsCost} Wins)`
 		prompt.ObjectText = formDef.Name
 		prompt.HoldDuration = 0.5
 		prompt.MaxActivationDistance = 10
-		prompt.Parent = pedestal
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = base
 
 		prompt.Triggered:Connect(function(player: Player)
-			EvolutionService.TryUnlockForm(player, worldId, i)
+			EvolutionService.TryUnlockForm(player, worldId, formIndex)
 		end)
 	end
 end

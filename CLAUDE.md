@@ -14,8 +14,11 @@ portals -- worlds connect to each other via walk-through screen gateways.
 
 Core loop: player works through a world's linear escape stages by reaching
 Win pads, earning Wins (the game's currency) along the way. Wins unlock
-that world's evolution forms (6 per world) and fuel Rebirth. Core stat is
+that world's evolution forms (12 per world) and fuel Rebirth. Core stat is
 "Mutation."
+
+Multiplier pads: a player's Mutation multiplier is the highest multiplier
+among the pads they qualify for -- pads do not stack.
 
 ## Scope: what Claude works on
 

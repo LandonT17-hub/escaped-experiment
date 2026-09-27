@@ -20,6 +20,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local PlayerDataStore = require(script.Parent.PlayerDataStore)
 local MutationService = require(ServerScriptService.Server.Mutation.MutationService)
 local EvolutionService = require(ServerScriptService.Server.Evolution.EvolutionService)
+local CodesService = require(ServerScriptService.Server.Menus.CodesService)
 local WorldsData = require(ServerScriptService.Server.Worlds.WorldsData)
 
 local PersistenceService = {}
@@ -30,10 +31,9 @@ function PersistenceService.GetCurrentWorld(player: Player): number
 	return currentWorldId[player] or 1
 end
 
--- Called by WorldGateway (wired in by WorldWiring) whenever a player walks
--- through a gateway into a new world -- keeps the persisted "where to
--- resume" value current without WorldGateway needing to know persistence
--- exists.
+-- Called whenever a player moves into a new world (via a world gateway /
+-- portal, once one is wired) -- keeps the persisted "where to resume" value
+-- current without the gateway needing to know persistence exists.
 function PersistenceService.SetCurrentWorld(player: Player, worldId: number)
 	currentWorldId[player] = worldId
 end
@@ -83,6 +83,8 @@ local function onPlayerAdded(player: Player)
 		else
 			currentWorldId[player] = 1
 		end
+		-- Always called, save or not: it also unlocks code redemption.
+		CodesService.LoadSaveData(player, saved and saved.RedeemedCodes)
 
 		if player.Character then
 			repositionForCurrentWorld(player, player.Character)
@@ -93,7 +95,8 @@ end
 local function gatherSaveData(player: Player): PlayerDataStore.SavedData?
 	local mutationData = MutationService.GetSaveData(player)
 	local evolutionData = EvolutionService.GetSaveData(player)
-	if not mutationData or not evolutionData then
+	local redeemedCodes = CodesService.GetSaveData(player)
+	if not mutationData or not evolutionData or not redeemedCodes then
 		-- One of the services already tore this player's state down (or
 		-- never set it up); nothing valid left to save.
 		return nil
@@ -106,6 +109,7 @@ local function gatherSaveData(player: Player): PlayerDataStore.SavedData?
 		CurrentWorldId = PersistenceService.GetCurrentWorld(player),
 		UnlockedForms = evolutionData.UnlockedForms,
 		EquippedForm = evolutionData.EquippedForm,
+		RedeemedCodes = redeemedCodes,
 	}
 end
 
@@ -122,6 +126,7 @@ local function onPlayerRemoving(player: Player)
 	-- departed player's entries don't linger in every service's tables.
 	MutationService.ClearPlayerData(player)
 	EvolutionService.ClearPlayerData(player)
+	CodesService.ClearPlayerData(player)
 	currentWorldId[player] = nil
 end
 

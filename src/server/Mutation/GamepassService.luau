@@ -8,51 +8,32 @@ local GamepassService = {}
 -- Cached per player so a Mutation grant (on every enemy kill, the hottest
 -- path in the game) never blocks on a MarketplaceService round trip.
 -- Refreshed on join and again whenever a purchase completes; until the
--- first refresh lands, a player's multiplier reads as 1 (no owned tiers) --
--- a brief, harmless undercount right at join, never an overcount.
-local ownedTiers: { [Player]: { [number]: boolean } } = {}
+-- first refresh lands, a player owns nothing -- a brief, harmless undercount
+-- right at join, never an overcount.
+local ownedPasses: { [Player]: { [number]: boolean } } = {}
 
-local function computeOwnedTiers(player: Player): { [number]: boolean }
+local function computeOwnedPasses(player: Player): { [number]: boolean }
 	local owned = {}
-	for i, tier in GamepassData.MutationMultiplierTiers do
-		if tier.GamePassId > 0 then
-			local ok, result =
-				pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, tier.GamePassId)
-			owned[i] = ok and result == true
-		end
+	for _, id in GamepassData.AllPassIds() do
+		local ok, result = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+		owned[id] = ok and result == true
 	end
 	return owned
 end
 
 function GamepassService.RefreshPlayer(player: Player)
-	local owned = computeOwnedTiers(player)
+	local owned = computeOwnedPasses(player)
 	-- The ownership check yields; re-check the player hasn't left in the
 	-- meantime before writing back, so a departed player's slot doesn't get
 	-- silently recreated.
 	if player.Parent then
-		ownedTiers[player] = owned
+		ownedPasses[player] = owned
 	end
 end
 
-function GamepassService.OwnsTier(player: Player, tierIndex: number): boolean
-	local owned = ownedTiers[player]
-	return owned ~= nil and owned[tierIndex] == true
-end
-
--- All owned tiers stack multiplicatively.
-function GamepassService.GetMutationMultiplier(player: Player): number
-	local owned = ownedTiers[player]
-	if not owned then
-		return 1
-	end
-
-	local total = 1
-	for i, tier in GamepassData.MutationMultiplierTiers do
-		if owned[i] then
-			total *= tier.Multiplier
-		end
-	end
-	return total
+function GamepassService.OwnsGamePass(player: Player, gamePassId: number): boolean
+	local owned = ownedPasses[player]
+	return owned ~= nil and owned[gamePassId] == true
 end
 
 function GamepassService.PromptPurchase(player: Player, gamePassId: number)
@@ -67,7 +48,7 @@ local function onPlayerAdded(player: Player)
 end
 
 local function onPlayerRemoving(player: Player)
-	ownedTiers[player] = nil
+	ownedPasses[player] = nil
 end
 
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, _gamePassId: number, wasPurchased: boolean)

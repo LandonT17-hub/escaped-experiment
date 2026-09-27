@@ -61,12 +61,10 @@ local equippedForm: { [Player]: EquippedForm } = {}
 local formUpdated = Remotes.GetRemoteEvent("FormUpdated")
 
 local function applyFormVisual(character: Model, worldConfig: WorldsData.WorldConfig, formIndex: number)
-	local scale = FORM_SCALES[formIndex]
-	if not scale then
-		return
-	end
-
-	local tierRatio = (formIndex - 1) / (#FORM_SCALES - 1)
+	-- Size tops out at the last FORM_SCALES entry; tint keeps escalating
+	-- across however many forms the world has.
+	local scale = FORM_SCALES[math.min(formIndex, #FORM_SCALES)]
+	local tierRatio = (formIndex - 1) / math.max(#worldConfig.Forms - 1, 1)
 	local color = UNTINTED_BASE:Lerp(worldConfig.ThemeColor, tierRatio)
 
 	for _, partName in BODY_PART_NAMES do

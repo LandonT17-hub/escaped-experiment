@@ -18,6 +18,7 @@ export type SavedData = {
 	CurrentWorldId: number,
 	UnlockedForms: { [string]: { [string]: boolean } },
 	EquippedForm: { WorldId: number, FormIndex: number },
+	RedeemedCodes: { [string]: boolean }?, -- absent in saves from before codes existed
 }
 
 local PlayerDataStore = {}

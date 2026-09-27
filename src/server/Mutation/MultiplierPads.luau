@@ -1,51 +1,137 @@
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
 local GamepassData = require(script.Parent.GamepassData)
 local GamepassService = require(script.Parent.GamepassService)
+local MapLookup = require(ServerScriptService.Server.Worlds.MapLookup)
 
--- Wires functionality onto the hand-built pad Parts (named
--- "MultiplierPad1".."MultiplierPad4") for one world's lobby -- doesn't
--- rebuild the geometry, just attaches a ProximityPrompt that prompts the
--- real Roblox purchase dialog. Called once per world by WorldWiring, same
--- as FormPedestals.WireUp, so all 4 worlds' copies of these pads work
--- identically.
---
--- Deliberately does not try to show per-player "Owned" state on the pad's
--- label or prompt -- those are shared Instance properties visible to every
--- player standing nearby at once, not per-viewer UI, so they can't correctly
--- reflect "owned for you, not owned for them" at the same time. Roblox's own
--- purchase dialog already tells a player if they already own the pass.
+-- The lobby's Multiplier Pads (Lobby.MultiplierPads > Pad1..6), each a Model
+-- with Multiplier / RequirementType / RequirementAmount attributes. A player
+-- qualifies for a pad when its requirement is met:
+--   Free     -- always
+--   Rebirths -- RebirthCount >= RequirementAmount
+--   Gamepass -- owns the pass mapped to the pad's PadIndex in GamepassData
+-- Their Mutation multiplier is the highest Multiplier among the pads they
+-- qualify for (not stacked). Derived live, never stored, so there's nothing
+-- to persist and it can't drift. Touching a Gamepass pad's Plate prompts the
+-- purchase.
+
+export type Pad = {
+	Multiplier: number,
+	RequirementType: string,
+	RequirementAmount: number,
+	GamePassId: number,
+}
+
+local PURCHASE_PROMPT_COOLDOWN = 5 -- seconds; Touched fires constantly while standing
+
 local MultiplierPads = {}
 
+local pads: { Pad } = {}
+local lastPromptAt: { [Player]: number } = {}
+
+local function qualifies(player: Player, pad: Pad, rebirthCount: number): boolean
+	if pad.RequirementType == "Free" then
+		return true
+	elseif pad.RequirementType == "Rebirths" then
+		return rebirthCount >= pad.RequirementAmount
+	elseif pad.RequirementType == "Gamepass" then
+		return pad.GamePassId > 0 and GamepassService.OwnsGamePass(player, pad.GamePassId)
+	end
+	return false
+end
+
+-- rebirthCount is passed in (rather than read from MutationService) because
+-- MutationService calls this -- avoids a require cycle.
+function MultiplierPads.GetMultiplier(player: Player, rebirthCount: number): number
+	local best = 1
+	for _, pad in pads do
+		if pad.Multiplier > best and qualifies(player, pad, rebirthCount) then
+			best = pad.Multiplier
+		end
+	end
+	return best
+end
+
+-- Pads sold as game passes that exist in the Creator Dashboard (id > 0),
+-- for the Store menu.
+function MultiplierPads.GetGamepassPads(): { Pad }
+	local result = {}
+	for _, pad in pads do
+		if pad.RequirementType == "Gamepass" and pad.GamePassId > 0 then
+			table.insert(result, pad)
+		end
+	end
+	return result
+end
+
+local function labelText(pad: Pad): string
+	local requirement = if pad.RequirementType == "Free"
+		then "Free"
+		elseif pad.RequirementType == "Rebirths" then `Requires {pad.RequirementAmount} Rebirths`
+		elseif pad.GamePassId > 0 then "Game Pass"
+		else "Game Pass (coming soon)"
+	return `x{pad.Multiplier} Mutation\n{requirement}`
+end
+
 function MultiplierPads.WireUp(padsFolder: Instance)
-	for i, tier in GamepassData.MutationMultiplierTiers do
-		local pad = padsFolder:FindFirstChild("MultiplierPad" .. i)
-		if not pad or not pad:IsA("BasePart") then
+	for i = 1, 6 do
+		local model = MapLookup.Find(padsFolder, "Pad" .. i, "Model")
+		if not model then
 			continue
 		end
 
-		local billboard = pad:FindFirstChild("Label")
-		local textLabel = billboard and billboard:FindFirstChild("TextLabel")
-		if textLabel and textLabel:IsA("TextLabel") then
-			textLabel.Text = if tier.GamePassId > 0
-				then `{tier.Name}\nBuy Now`
-				else `{tier.Name}\n(coming soon)`
+		local multiplier = MapLookup.Attr(model, "Multiplier", "number")
+		local requirementType = MapLookup.Attr(model, "RequirementType", "string")
+		if not multiplier or not requirementType then
+			continue
 		end
 
-		if tier.GamePassId <= 0 then
-			continue -- not created in the Creator Dashboard yet -- see GamepassData.luau
+		if requirementType ~= "Free" and requirementType ~= "Rebirths" and requirementType ~= "Gamepass" then
+			warn(`[Map] {model:GetFullName()} has unknown RequirementType "{requirementType}"`)
+			continue
 		end
 
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "PurchasePrompt"
-		prompt.ActionText = "Buy"
-		prompt.ObjectText = tier.Name
-		prompt.HoldDuration = 0.5
-		prompt.MaxActivationDistance = 10
-		prompt.Parent = pad
+		local padIndex = model:GetAttribute("PadIndex") or i
+		local pad: Pad = {
+			Multiplier = multiplier,
+			RequirementType = requirementType,
+			RequirementAmount = model:GetAttribute("RequirementAmount") or 0,
+			GamePassId = GamepassData.MultiplierPadPasses[padIndex] or 0,
+		}
+		table.insert(pads, pad)
 
-		prompt.Triggered:Connect(function(player: Player)
-			GamepassService.PromptPurchase(player, tier.GamePassId)
-		end)
+		local text = MapLookup.Find(MapLookup.Find(model, "Label"), "Text", "TextLabel")
+		if text then
+			text.Text = labelText(pad)
+		end
+
+		if pad.RequirementType == "Gamepass" and pad.GamePassId > 0 then
+			local plate = MapLookup.Find(model, "Plate", "BasePart")
+			if plate then
+				plate.Touched:Connect(function(hit: BasePart)
+					local character = hit.Parent
+					local player = character and Players:GetPlayerFromCharacter(character)
+					if not player or GamepassService.OwnsGamePass(player, pad.GamePassId) then
+						return
+					end
+
+					local now = os.clock()
+					local last = lastPromptAt[player]
+					if last and now - last < PURCHASE_PROMPT_COOLDOWN then
+						return
+					end
+					lastPromptAt[player] = now
+
+					GamepassService.PromptPurchase(player, pad.GamePassId)
+				end)
+			end
+		end
 	end
 end
+
+Players.PlayerRemoving:Connect(function(player: Player)
+	lastPromptAt[player] = nil
+end)
 
 return MultiplierPads

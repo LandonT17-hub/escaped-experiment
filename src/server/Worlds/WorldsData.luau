@@ -21,44 +21,61 @@ export type WorldConfig = {
 	ThemeColor: Color3,
 	Forms: { FormData.FormDefinition },
 	Stages: { StageObjective.StageConfig },
+	Boss: StageObjective.StageConfig,
 }
 
 local WorldsData = {}
 
--- Shared per-stage escalation shape (World1's original placeholder numbers,
--- reproduced exactly at worldScale = 1). RecommendedDamage is base 10 *
--- DamageMult, matching CombatService's BASE_DAMAGE constant.
-local STAGE_CURVE = {
-	{ HealthMult = 1.00, MutationMult = 1.00, WinsReward = 1, DamageMult = 1.00 },
-	{ HealthMult = 1.80, MutationMult = 1.60, WinsReward = 2, DamageMult = 1.50 },
-	{ HealthMult = 2.80, MutationMult = 2.40, WinsReward = 3, DamageMult = 2.20 },
-	{ HealthMult = 4.00, MutationMult = 3.40, WinsReward = 4, DamageMult = 3.20 },
-	{ HealthMult = 5.50, MutationMult = 4.80, WinsReward = 6, DamageMult = 4.50 },
-}
-
+-- Per-stage escalation: each stage multiplies the previous one. Placeholder
+-- numbers (no design doc exists); tune freely. RecommendedDamage is in the
+-- same units as CombatService's BASE_DAMAGE (10). Wins payouts are not here --
+-- they come from each reward pad's Wins attribute in the map.
 local STAGE_BASE_HEALTH = 100
 local STAGE_BASE_MUTATION = 25
 local STAGE_BASE_DAMAGE = 10
+local STAGE_HEALTH_GROWTH = 1.5
+local STAGE_MUTATION_GROWTH = 1.4
+local STAGE_DAMAGE_GROWTH = 1.45
 
-local function generateStages(worldScale: number): { StageObjective.StageConfig }
+local function generateStages(count: number, worldScale: number): { StageObjective.StageConfig }
 	local stages = {}
-	for i, curve in STAGE_CURVE do
+	for i = 1, count do
 		table.insert(stages, {
 			Name = string.format("Stage %d", i),
 			EnemyCount = 3,
-			EnemyHealth = math.floor(STAGE_BASE_HEALTH * curve.HealthMult * worldScale),
+			EnemyHealth = math.floor(STAGE_BASE_HEALTH * STAGE_HEALTH_GROWTH ^ (i - 1) * worldScale),
 			EnemyScale = 1.8 + (i - 1) * 0.1,
-			MutationPerKill = math.floor(STAGE_BASE_MUTATION * curve.MutationMult * worldScale),
-			WinsReward = curve.WinsReward,
-			RecommendedDamage = math.floor(STAGE_BASE_DAMAGE * curve.DamageMult * worldScale),
+			MutationPerKill = math.floor(STAGE_BASE_MUTATION * STAGE_MUTATION_GROWTH ^ (i - 1) * worldScale),
+			RecommendedDamage = math.floor(STAGE_BASE_DAMAGE * STAGE_DAMAGE_GROWTH ^ (i - 1) * worldScale),
 		})
 	end
 	return stages
 end
 
--- Shared per-form escalation shape (World1's original FormData.World1Forms
--- ladder, reproduced exactly at worldScale = 1). Names are per-world flavor
--- text only -- no custom art, just strings.
+-- The boss is one big enemy, a step up from the world's final stage.
+local BOSS_HEALTH_MULT = 6
+local BOSS_MUTATION_MULT = 10
+
+local function generateBoss(stageCount: number, worldScale: number): StageObjective.StageConfig
+	return {
+		Name = "Boss",
+		EnemyCount = 1,
+		EnemyHealth = math.floor(
+			STAGE_BASE_HEALTH * STAGE_HEALTH_GROWTH ^ (stageCount - 1) * BOSS_HEALTH_MULT * worldScale
+		),
+		EnemyScale = 3.5,
+		MutationPerKill = math.floor(
+			STAGE_BASE_MUTATION * STAGE_MUTATION_GROWTH ^ (stageCount - 1) * BOSS_MUTATION_MULT * worldScale
+		),
+		RecommendedDamage = math.floor(STAGE_BASE_DAMAGE * STAGE_DAMAGE_GROWTH ^ stageCount * worldScale),
+	}
+end
+
+-- Per-form escalation (the first 6 are World1's original ladder at
+-- worldScale = 1). Every world has 12 forms, one per name. Names and
+-- WinsCosts are placeholders where a world's map has pedestals --
+-- FormPedestals overwrites them from each pedestal's FormName/WinsCost
+-- attributes; DamageMultiplier always comes from here.
 local FORM_CURVE = {
 	{ WinsCostMult = 0, DamageMult = 1.00 },
 	{ WinsCostMult = 5, DamageMult = 1.50 },
@@ -66,13 +83,20 @@ local FORM_CURVE = {
 	{ WinsCostMult = 40, DamageMult = 3.50 },
 	{ WinsCostMult = 100, DamageMult = 5.50 },
 	{ WinsCostMult = 250, DamageMult = 9.00 },
+	{ WinsCostMult = 500, DamageMult = 14.0 },
+	{ WinsCostMult = 900, DamageMult = 22.0 },
+	{ WinsCostMult = 1500, DamageMult = 35.0 },
+	{ WinsCostMult = 2500, DamageMult = 55.0 },
+	{ WinsCostMult = 4000, DamageMult = 85.0 },
+	{ WinsCostMult = 6000, DamageMult = 130.0 },
 }
 
 local function generateForms(names: { string }, worldScale: number): { FormData.FormDefinition }
 	local forms = {}
-	for i, curve in FORM_CURVE do
+	for i, name in names do
+		local curve = FORM_CURVE[i]
 		table.insert(forms, {
-			Name = names[i],
+			Name = name,
 			WinsCost = math.floor(curve.WinsCostMult * worldScale),
 			DamageMultiplier = curve.DamageMult * worldScale,
 		})
@@ -92,50 +116,96 @@ local FLOOD_COLOR = Color3.fromRGB(50, 130, 180)
 -- Invariant callers rely on (EvolutionService, WorldWiring): Worlds[i].Id == i,
 -- i.e. this array is in ascending Id order with no gaps, so a worldId can be
 -- used directly as an index into it.
+-- Form names/costs past the 6th are placeholders; a world's 12 pedestal
+-- attributes (FormName/WinsCost) replace them once its map is wired.
 local Worlds: { WorldConfig } = {
 	{
 		Id = 1,
 		Name = "Cryo",
 		LobbyOrigin = Vector3.new(0, 0, -300),
 		ThemeColor = CRYO_COLOR,
-		Forms = generateForms(
-			{ "Subject", "Frostbitten", "Rimed", "Glacial", "Cryo-Aberrant", "Absolute Zero" },
-			1
-		),
-		Stages = generateStages(1),
+		Forms = generateForms({
+			"Subject",
+			"Frostbitten",
+			"Rimed",
+			"Glacial",
+			"Cryo-Aberrant",
+			"Absolute Zero",
+			"Form 7",
+			"Form 8",
+			"Form 9",
+			"Form 10",
+			"Form 11",
+			"Form 12",
+		}, 1),
+		Stages = generateStages(12, 1),
+		Boss = generateBoss(12, 1),
 	},
 	{
 		Id = 2,
 		Name = "Bio-Dome",
 		LobbyOrigin = Vector3.new(WORLD_X_SPACING, 0, -300),
 		ThemeColor = BIO_DOME_COLOR,
-		Forms = generateForms(
-			{ "Subject", "Spore-Touched", "Chlorotic", "Photosynthetic", "Verdant Horror", "Bloom Apex" },
-			2.5
-		),
-		Stages = generateStages(2.5),
+		Forms = generateForms({
+			"Subject",
+			"Spore-Touched",
+			"Chlorotic",
+			"Photosynthetic",
+			"Verdant Horror",
+			"Bloom Apex",
+			"Form 7",
+			"Form 8",
+			"Form 9",
+			"Form 10",
+			"Form 11",
+			"Form 12",
+		}, 2.5),
+		Stages = generateStages(5, 2.5),
+		Boss = generateBoss(5, 2.5),
 	},
 	{
 		Id = 3,
 		Name = "Thermal",
 		LobbyOrigin = Vector3.new(WORLD_X_SPACING * 2, 0, -300),
 		ThemeColor = THERMAL_COLOR,
-		Forms = generateForms(
-			{ "Subject", "Scorched", "Magma-Veined", "Pyroclastic", "Ember Colossus", "Solar Flare" },
-			6
-		),
-		Stages = generateStages(6),
+		Forms = generateForms({
+			"Subject",
+			"Scorched",
+			"Magma-Veined",
+			"Pyroclastic",
+			"Ember Colossus",
+			"Solar Flare",
+			"Form 7",
+			"Form 8",
+			"Form 9",
+			"Form 10",
+			"Form 11",
+			"Form 12",
+		}, 6),
+		Stages = generateStages(5, 6),
+		Boss = generateBoss(5, 6),
 	},
 	{
 		Id = 4,
 		Name = "Flood",
 		LobbyOrigin = Vector3.new(WORLD_X_SPACING * 3, 0, -300),
 		ThemeColor = FLOOD_COLOR,
-		Forms = generateForms(
-			{ "Subject", "Waterlogged", "Brackish", "Abyssal", "Leviathan Spawn", "Tidal Sovereign" },
-			14
-		),
-		Stages = generateStages(14),
+		Forms = generateForms({
+			"Subject",
+			"Waterlogged",
+			"Brackish",
+			"Abyssal",
+			"Leviathan Spawn",
+			"Tidal Sovereign",
+			"Form 7",
+			"Form 8",
+			"Form 9",
+			"Form 10",
+			"Form 11",
+			"Form 12",
+		}, 14),
+		Stages = generateStages(5, 14),
+		Boss = generateBoss(5, 14),
 	},
 }
 

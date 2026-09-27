@@ -14,15 +14,15 @@ function MutationHUD.Init()
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = playerGui
 
-	-- Player health bar, top-center -- prominent since it needs to be readable
-	-- mid-combat. Reads the player's own Humanoid.Health directly; that's a
+	-- Player health bar, top-right corner -- readable mid-combat without
+	-- covering the stage objective banner (top-center). Reads the player's own Humanoid.Health directly; that's a
 	-- normal replicated property, so no remote round-trip is needed for display
 	-- -- the server is still the only thing that ever writes it.
 	local healthBar = Instance.new("Frame")
 	healthBar.Name = "HealthBar"
 	healthBar.Size = UDim2.fromOffset(300, 28)
-	healthBar.AnchorPoint = Vector2.new(0.5, 0)
-	healthBar.Position = UDim2.new(0.5, 0, 0, 20)
+	healthBar.AnchorPoint = Vector2.new(1, 0)
+	healthBar.Position = UDim2.new(1, -20, 0, 20)
 	healthBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	healthBar.BorderSizePixel = 0
 	healthBar.Parent = screenGui
