@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 
 -- Player characters show no overhead name or health bar -- a player's own HP
--- lives on their HUD (MutationHUD, top-right). Enemies keep their overhead
+-- lives on their HUD (HUDController -> MainHUD HPBar). Enemies keep their overhead
 -- health bars (DummyEnemy builds those on the enemy, not here).
 
 local function stripHealthBillboard(instance: Instance)

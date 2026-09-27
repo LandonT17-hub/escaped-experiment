@@ -20,11 +20,13 @@ function WorldWiring.Wire(config: WorldsData.WorldConfig, parts: MapResolver.Wor
 	for i, stageConfig in config.Stages do
 		local stageParts = parts.Stages[i]
 		if stageParts then
+			stageParts.Index = i
 			StageObjective.Wire(stageParts, stageConfig)
 		end
 	end
 
 	if parts.Boss then
+		parts.Boss.Index = #config.Stages + 1
 		StageObjective.Wire(parts.Boss, config.Boss)
 	end
 

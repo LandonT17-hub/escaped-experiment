@@ -52,6 +52,9 @@ export type StageParts = {
 	RewardPads: { RewardPad },
 	StartCFrame: CFrame?, -- respawn point for players who die in this stage
 	Floor: BasePart?, -- enemies are stood on this, directly below their marker
+	-- Position in the world's run (stages 1..N, boss N + 1), published to the
+	-- HUD via RunProgress. Set by WorldWiring.
+	Index: number?,
 }
 
 export type BuiltStage = {
@@ -199,6 +202,12 @@ function StageObjective.Wire(parts: StageParts, config: StageConfig): BuiltStage
 		remaining -= 1
 		if remaining <= 0 and not cleared then
 			cleared = true
+			-- Everyone in the stage when it clears has cleared it.
+			if parts.Index then
+				for player in wasInZone do
+					RunProgress.MarkStageCleared(player, parts.Index)
+				end
+			end
 			setPadsActive(true)
 			setGateLocked(false)
 		end
@@ -278,6 +287,9 @@ function StageObjective.Wire(parts: StageParts, config: StageConfig): BuiltStage
 
 			RunProgress.MarkClaimed(player, claimKey)
 			MutationService.GrantWins(player, pad.Wins)
+			if parts.Index then
+				RunProgress.MarkStageCleared(player, parts.Index)
+			end
 
 			if pad.RespawnToLobby then
 				RunProgress.CompleteRun(player)
@@ -308,6 +320,13 @@ function StageObjective.Wire(parts: StageParts, config: StageConfig): BuiltStage
 						progressUpdated:FireClient(player, config.EnemyCount - remaining, config.EnemyCount, cleared)
 						if parts.StartCFrame then
 							RunProgress.SetCheckpoint(player, parts.StartCFrame)
+						end
+					end
+					if parts.Index then
+						if inZone then
+							RunProgress.SetCurrentStage(player, parts.Index)
+						else
+							RunProgress.LeaveStage(player, parts.Index)
 						end
 					end
 				end
